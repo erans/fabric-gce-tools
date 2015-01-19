@@ -1,6 +1,9 @@
 # fabric-gce-tools - Tools to integrate Fabric with Google Compute Engine (GCE)
 
-Easily and dynamically assign all your servers roles in Fabric based on the tags assigned to each instance in GCE.
+Tools to integrate Fabric with Google Compute Engine (GCE).
+
+- Automagically assign all your servers roles in Fabric based on the tags assigned to each instance in GCE.
+- Feel free to send pull requests with additional helpers that you wrote and use with Fabric and GCE.
 
 ## Installation
 * `pip install fabric-gce-tools`
