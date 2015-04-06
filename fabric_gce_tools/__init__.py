@@ -22,6 +22,9 @@
 
 from __future__ import absolute_import
 import subprocess
+import os.path
+import time
+from os.path import expanduser
 try:
     import simplejson as json
 except ImportError:
@@ -30,6 +33,11 @@ except ImportError:
 from fabric.api import env
 
 _gcloud_exists = None
+_data_loaded = False
+
+INSTANCES_CACHE = None
+INSTANCES_NAME_INDEX = {}
+INSTANCES_IP_INDEX = {}
 
 def _check_gcloud():
     gcloud_version = None
@@ -40,9 +48,67 @@ def _check_gcloud():
 
     _gcloud_exists = (gcloud_version != None)
 
-def _get_data():
-    raw_data = subprocess.check_output("gcloud compute instances list --format=json", shell=True)
-    data = json.loads(raw_data)
+def _build_instances_index():
+    global INSTANCES_NAME_INDEX
+    global INSTANCES_IP_INDEX
+    INSTANCES_NAME_INDEX = {}
+    INSTANCES_IP_INDEX= {}
+
+    for instance in INSTANCES_CACHE:
+        if not instance["name"] in INSTANCES_NAME_INDEX:
+            INSTANCES_NAME_INDEX[instance["name"]] = instance
+
+        ip = instance["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
+        if not ip in INSTANCES_IP_INDEX:
+            INSTANCES_IP_INDEX[ip] = instance
+
+def _get_data(use_cache, cache_expiration):
+    global INSTANCES_CACHE
+
+    loaded_cache = False
+    execute_command = True
+    data = None
+
+    cache_path = os.path.join(expanduser("~"), ".gcetools")
+    cache_file_path = os.path.join(cache_path, "instances")
+
+    if use_cache:
+        if not os.path.exists(cache_path):
+            os.makedirs(cache_path)
+
+        if os.path.exists(cache_file_path):
+            created_timestamp = os.path.getctime(cache_file_path)
+            if created_timestamp + cache_expiration > time.time():
+                f = open(cache_file_path, "r")
+                try:
+                    raw_data = f.read()
+                    data = json.loads(raw_data)
+                    execute_command = False
+                    loaded_cache = True
+                finally:
+                    f.close()
+
+    if execute_command:
+        global _gcloud_exists
+
+        if _gcloud_exists is None:
+            _check_gcloud()
+        else:
+            if not _gcloud_exists:
+                raise Exception("Can't find 'gcloud'. That means you don't have gcutil installed or it's not part of the path.\nTo install gcutil see https://cloud.google.com/sdk/")
+
+        raw_data = subprocess.check_output("gcloud compute instances list --format=json", shell=True)
+        data = json.loads(raw_data)
+
+        if use_cache and not loaded_cache:
+            f = open(cache_file_path, "w")
+            try:
+                f.write(raw_data)
+            finally:
+                f.close()
+
+    INSTANCES_CACHE = data
+    _build_instances_index()
     return data
 
 def _get_roles(data):
@@ -60,26 +126,80 @@ def _get_roles(data):
 
     return roles
 
-def update_roles_gce():
+def get_instance_by_name(name):
+    if not _data_loaded:
+        update_roles_gce()
+
+    if name in INSTANCES_NAME_INDEX:
+        return INSTANCES_NAME_INDEX[name]
+
+    return None
+
+def get_instance_by_ip(ip):
+    if not _data_loaded:
+        update_roles_gce()
+
+    if ip in INSTANCES_IP_INDEX:
+        return INSTANCES_IP_INDEX[ip]
+
+    return None
+
+def get_instance_name_by_ip(ip):
+    instance = get_instance_by_ip(ip)
+    if instance:
+        return instance["name"]
+
+    return None
+
+def get_instance_zone_by_name(name):
+    instance = get_instance_by_name(name)
+    if instance:
+        return instance["zone"]
+
+    return None
+
+def get_instance_zone_by_ip(ip):
+    instance = get_instance_by_ip(ip)
+    if instance:
+        return instance["zone"]
+
+    return None
+
+def target_pool_add_instance(target_pool_name, instance_name, instance_zone):
+    raw_data = subprocess.check_output("gcloud compute target-pools add-instances {target_pool} --instances {instance_name} --zone {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone=instance_zone), shell=True)
+
+def target_pool_remove_instance(target_pool_name, instance_name, instance_zone):
+    raw_data = subprocess.check_output("gcloud compute target-pools remove-instances {target_pool} --instances {instance_name} --zone {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone=instance_zone), shell=True)
+
+def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcetools/instances"):
     """
     Dynamically update fabric's roles by using assigning the tags associated with
     each machine in Google Compute Engine.
 
+    use_cache - will store a local cache in ~/.gcetools/
+    cache_expiration - cache expiration in seconds (default: 1 day)
+    cache_path - the path to store instances data (default: ~/.gcetools/instances)
+
     How to use:
-    - Call 'update_roles_gce' at the end of your Fabfile (it will run each time you run fabric).
+    - Call 'update_roles_gce' at the end of your fabfile.py (it will run each
+      time you run fabric).
     - On each function use the regular @roles decorator and set the role to the name
       of one of the tags associated with the instances you wish to work with
     """
-    global _gcloud_exists
-
-    if _gcloud_exists is None:
-        _check_gcloud()
-    else:
-        if not _gcloud_exists:
-            raise Exception("Can't find 'gcloud'. That means you don't have gcutil installed or it's not part of the path.\nTo install gcutil see https://cloud.google.com/sdk/")
-
-    data = _get_data()
+    data = _get_data(use_cache, cache_expiration)
     roles = _get_roles(data)
     env.roledefs.update(roles)
 
-__all__ = ["update_roles_gce"]
+    _data_loaded = True
+
+
+__all__ = [
+    "update_roles_gce",
+    "get_instance_by_ip",
+    "get_instance_by_name",
+    "get_instance_name_by_ip",
+    "get_instance_zone_by_ip",
+    "get_instance_zone_by_name",
+    "target_pool_add_instance",
+    "target_pool_remove_instance"
+]
