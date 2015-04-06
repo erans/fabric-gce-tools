@@ -36,6 +36,7 @@ def take_server_into_lb():
 def deploy_server():
     take_server_out_of_lb()
     run("do something")
+    take_server_into_lb()
 
 # Runs every time you run "fab something".
 # Add it at the end of the file to make sure it runs each time.
