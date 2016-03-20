@@ -120,8 +120,8 @@ def _get_roles(data):
                 if not role in roles:
                     roles[role] = []
 
-                address = i["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
-                if not address in roles[role]:
+                address = i.get("networkInterfaces", [{}])[0].get("accessConfigs", [{}])[0].get("natIP", None)
+                if address and not address in roles[role]:
                     roles[role].append(address)
 
     return roles
