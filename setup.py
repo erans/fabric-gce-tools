@@ -24,7 +24,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="fabric-gce-tools",
-    version="0.3",
+    version="0.4",
     description="Fabric integration with Google Compute Engine (GCE)",
     author="Eran Sandler",
     author_email="eran@sandler.co.il",

@@ -58,8 +58,8 @@ def _build_instances_index():
         if not instance["name"] in INSTANCES_NAME_INDEX:
             INSTANCES_NAME_INDEX[instance["name"]] = instance
 
-        ip = instance["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
-        if not ip in INSTANCES_IP_INDEX:
+        ip = instance.get("networkInterfaces", [{}])[0].get("accessConfigs", [{}])[0].get("natIP", None)
+        if ip and not ip in INSTANCES_IP_INDEX:
             INSTANCES_IP_INDEX[ip] = instance
 
 def _get_data(use_cache, cache_expiration):
