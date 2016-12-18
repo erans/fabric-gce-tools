@@ -34,6 +34,7 @@ from fabric.api import env
 
 _gcloud_exists = None
 _data_loaded = False
+_gcloud_version = None
 
 INSTANCES_CACHE = None
 INSTANCES_NAME_INDEX = {}
@@ -47,6 +48,16 @@ def _check_gcloud():
         raise Exception("Failed to run 'gcloud version'. That means you don't have gcloud installed or it's not part of the path.\nTo install gcutil see https://cloud.google.com/sdk/\nPrevious versions of fabric_gce_tools used gcutil which is about to be deprecated.")
 
     _gcloud_exists = (gcloud_version != None)
+
+    if _gcloud_exists:
+        _gcloud_version = int(gcloud_version.split("\n")[0].split(" ")[-1].split(".")[0])
+
+def _get_zone_flag_name():
+    if _gcloud_version < 138:
+        return "--zone"
+
+    return "--instances-zone"
+
 
 def _build_instances_index():
     global INSTANCES_NAME_INDEX
@@ -166,10 +177,10 @@ def get_instance_zone_by_ip(ip):
     return None
 
 def target_pool_add_instance(target_pool_name, instance_name, instance_zone):
-    raw_data = subprocess.check_output("gcloud compute target-pools add-instances {target_pool} --instances {instance_name} --zone {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone=instance_zone), shell=True)
+    raw_data = subprocess.check_output("gcloud compute target-pools add-instances {target_pool} --instances {instance_name} {zone_flag} {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone_flag=_get_zone_flag_name(), zone=instance_zone), shell=True)
 
 def target_pool_remove_instance(target_pool_name, instance_name, instance_zone):
-    raw_data = subprocess.check_output("gcloud compute target-pools remove-instances {target_pool} --instances {instance_name} --zone {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone=instance_zone), shell=True)
+    raw_data = subprocess.check_output("gcloud compute target-pools remove-instances {target_pool} --instances {instance_name} {zone_flag} {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone_flag=_get_zone_flag_name(), zone=instance_zone), shell=True)
 
 def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcetools/instances"):
     """
