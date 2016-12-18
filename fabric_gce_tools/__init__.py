@@ -53,6 +53,7 @@ def _check_gcloud():
         _gcloud_version = int(gcloud_version.split("\n")[0].split(" ")[-1].split(".")[0])
 
 def _get_zone_flag_name():
+    global _gcloud_version
     if _gcloud_version < 138:
         return "--zone"
 
