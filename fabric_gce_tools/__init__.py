@@ -234,6 +234,7 @@ __all__ = [
     "get_instance_zone_by_ip",
     "get_instance_zone_by_name",
     "get_instances_by_group",
+    "get_managed_instance_groups",
     "target_pool_add_instance",
     "target_pool_remove_instance"
 ]
