@@ -74,7 +74,7 @@ def _build_instances_index():
         if ip and not ip in INSTANCES_IP_INDEX:
             INSTANCES_IP_INDEX[ip] = instance
 
-def _get_data(use_cache, cache_expiration, group_name=None):
+def _get_data(use_cache, cache_expiration, group_name=None, region=None, zone=None):
     global INSTANCES_CACHE
 
     loaded_cache = False
@@ -110,7 +110,13 @@ def _get_data(use_cache, cache_expiration, group_name=None):
                 raise Exception("Can't find 'gcloud'. That means you don't have gcutil installed or it's not part of the path.\nTo install gcutil see https://cloud.google.com/sdk/")
 
         if group_name != None:
-            raw_data = subprocess.check_output("gcloud compute instance-groups managed list-instances %s --format=json" % group_name, shell=True)
+            if region is not None:
+                region_or_zone =  " --region=%s" % region
+            elif zone is not None:
+                region_or_zone = " --zone=%s" % zone
+            else:
+                region_or_zone = ""
+            raw_data = subprocess.check_output("gcloud compute instance-groups managed list-instances %s%s --format=json" % (group_name, region_or_zone), shell=True)
             data = json.loads(raw_data)
         else:
             raw_data = subprocess.check_output("gcloud compute instances list --format=json", shell=True)
@@ -174,9 +180,9 @@ def get_instance_zone_by_ip(ip):
 
     return None
 
-def get_instances_by_group(group):
+def get_instances_by_group(group, region, zone):
     if not _data_loaded:
-        update_roles_gce(group_name=group)
+        update_roles_gce(group_name=group, region=region, zone=zone)
     return data
 
 def target_pool_add_instance(target_pool_name, instance_name, instance_zone):
@@ -185,7 +191,7 @@ def target_pool_add_instance(target_pool_name, instance_name, instance_zone):
 def target_pool_remove_instance(target_pool_name, instance_name, instance_zone):
     raw_data = subprocess.check_output("gcloud compute target-pools remove-instances {target_pool} --instances {instance_name} {zone_flag} {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone_flag=_get_zone_flag_name(), zone=instance_zone), shell=True)
     
-def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcetools/instances", group_name=None):
+def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcetools/instances", group_name=None, region=None, zone=None):
     """
     Dynamically update fabric's roles by using assigning the tags associated with
     each machine in Google Compute Engine.
@@ -194,6 +200,8 @@ def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcet
     cache_expiration - cache expiration in seconds (default: 1 day)
     cache_path - the path to store instances data (default: ~/.gcetools/instances)
     group_name - optional managed instance group to use instead of the global instance pool
+    region - gce region name (such as `us-central1`) for a regional managed instance group
+    zone - gce zone name (such as `us-central1-a`) for a zone managed instance group
 
     How to use:
     - Call 'update_roles_gce' at the end of your fabfile.py (it will run each
@@ -201,7 +209,7 @@ def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcet
     - On each function use the regular @roles decorator and set the role to the name
       of one of the tags associated with the instances you wish to work with
     """
-    data = _get_data(use_cache, cache_expiration, group_name=group_name)
+    data = _get_data(use_cache, cache_expiration, group_name=group_name, region=region, zone=zone)
     roles = _get_roles(data)
     env.roledefs.update(roles)
 
@@ -215,6 +223,7 @@ __all__ = [
     "get_instance_name_by_ip",
     "get_instance_zone_by_ip",
     "get_instance_zone_by_name",
+    "get_instances_by_group",
     "target_pool_add_instance",
     "target_pool_remove_instance"
 ]
