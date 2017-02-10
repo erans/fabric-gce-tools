@@ -190,6 +190,10 @@ def get_instance_zone_by_ip(ip):
 def get_instances_by_group(group, region, zone):
     return update_roles_gce(group_name=group, region=region, zone=zone)
 
+def get_managed_instance_groups():
+    raw_data = subprocess.check_output("gcloud compute instance-groups managed list --format=json", shell=True)
+    return json.loads(raw_data)
+
 def target_pool_add_instance(target_pool_name, instance_name, instance_zone):
     raw_data = subprocess.check_output("gcloud compute target-pools add-instances {target_pool} --instances {instance_name} {zone_flag} {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone_flag=_get_zone_flag_name(), zone=instance_zone), shell=True)
 
