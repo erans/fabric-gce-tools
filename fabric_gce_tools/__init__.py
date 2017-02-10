@@ -67,12 +67,17 @@ def _build_instances_index():
     INSTANCES_IP_INDEX= {}
 
     for instance in INSTANCES_CACHE:
-        if not instance["name"] in INSTANCES_NAME_INDEX:
+        if instance.get("name") != None and not instance["name"] in INSTANCES_NAME_INDEX:
             INSTANCES_NAME_INDEX[instance["name"]] = instance
+            instanceData = instance
+        elif instance.get("instance") != None:
+            ## need to retrieve the instance itself, we're coming from an instance group
+            raw_instance_data = subprocess.check_output("gcloud compute instances describe %s --format=json", shell=True)
+            instanceData = json.loads(raw_instance_data)
 
-        ip = instance.get("networkInterfaces", [{}])[0].get("accessConfigs", [{}])[0].get("natIP", None)
+        ip = instanceData.get("networkInterfaces", [{}])[0].get("accessConfigs", [{}])[0].get("natIP", None)
         if ip and not ip in INSTANCES_IP_INDEX:
-            INSTANCES_IP_INDEX[ip] = instance
+            INSTANCES_IP_INDEX[ip] = instanceData
 
 def _get_data(use_cache, cache_expiration, group_name=None, region=None, zone=None):
     global INSTANCES_CACHE
