@@ -217,7 +217,7 @@ def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcet
     env.roledefs.update(roles)
 
     _data_loaded = True
-    return data
+    return INSTANCES_CACHE
 
 
 __all__ = [
