@@ -72,7 +72,7 @@ def _build_instances_index():
             instanceData = instance
         elif instance.get("instance") != None:
             ## need to retrieve the instance itself, we're coming from an instance group
-            raw_instance_data = subprocess.check_output("gcloud compute instances describe %s --format=json", shell=True)
+            raw_instance_data = subprocess.check_output("gcloud compute instances describe %s --format=json" % instance["instance"].split("/")[-1], shell=True)
             instanceData = json.loads(raw_instance_data)
 
         ip = instanceData.get("networkInterfaces", [{}])[0].get("accessConfigs", [{}])[0].get("natIP", None)
