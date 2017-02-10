@@ -186,9 +186,7 @@ def get_instance_zone_by_ip(ip):
     return None
 
 def get_instances_by_group(group, region, zone):
-    if not _data_loaded:
-        update_roles_gce(group_name=group, region=region, zone=zone)
-    return data
+    return update_roles_gce(group_name=group, region=region, zone=zone)
 
 def target_pool_add_instance(target_pool_name, instance_name, instance_zone):
     raw_data = subprocess.check_output("gcloud compute target-pools add-instances {target_pool} --instances {instance_name} {zone_flag} {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone_flag=_get_zone_flag_name(), zone=instance_zone), shell=True)
@@ -219,6 +217,7 @@ def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcet
     env.roledefs.update(roles)
 
     _data_loaded = True
+    return data
 
 
 __all__ = [
