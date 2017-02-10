@@ -60,13 +60,15 @@ def _get_zone_flag_name():
     return "--instances-zone"
 
 
-def _build_instances_index():
+def _build_instances_index(data):
     global INSTANCES_NAME_INDEX
     global INSTANCES_IP_INDEX
+    global INSTANCES_CACHE
     INSTANCES_NAME_INDEX = {}
-    INSTANCES_IP_INDEX= {}
+    INSTANCES_IP_INDEX = {}
+    allInstanceData = []
 
-    for instance in INSTANCES_CACHE:
+    for instance in data:
         if instance.get("name") != None and not instance["name"] in INSTANCES_NAME_INDEX:
             INSTANCES_NAME_INDEX[instance["name"]] = instance
             instanceData = instance
@@ -78,6 +80,8 @@ def _build_instances_index():
         ip = instanceData.get("networkInterfaces", [{}])[0].get("accessConfigs", [{}])[0].get("natIP", None)
         if ip and not ip in INSTANCES_IP_INDEX:
             INSTANCES_IP_INDEX[ip] = instanceData
+            allInstanceData.append(instanceData)
+    INSTANCES_CACHE = allInstanceData
 
 def _get_data(use_cache, cache_expiration, group_name=None, region=None, zone=None):
     global INSTANCES_CACHE
@@ -126,9 +130,7 @@ def _get_data(use_cache, cache_expiration, group_name=None, region=None, zone=No
         else:
             raw_data = subprocess.check_output("gcloud compute instances list --format=json", shell=True)
             data = json.loads(raw_data)
-
-    INSTANCES_CACHE = data
-    _build_instances_index()
+    _build_instances_index(data)
     return data
 
 def _get_roles(data):
