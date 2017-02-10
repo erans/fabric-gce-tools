@@ -60,21 +60,32 @@ def _get_zone_flag_name():
     return "--instances-zone"
 
 
-def _build_instances_index():
+def _build_instances_index(data):
     global INSTANCES_NAME_INDEX
     global INSTANCES_IP_INDEX
+    global INSTANCES_CACHE
     INSTANCES_NAME_INDEX = {}
-    INSTANCES_IP_INDEX= {}
+    INSTANCES_IP_INDEX = {}
+    allInstanceData = []
 
-    for instance in INSTANCES_CACHE:
-        if not instance["name"] in INSTANCES_NAME_INDEX:
+    for instance in data:
+        if instance.get("name") != None and not instance["name"] in INSTANCES_NAME_INDEX:
             INSTANCES_NAME_INDEX[instance["name"]] = instance
+            instanceData = instance
+        elif instance.get("instance") != None:
+            ## need to retrieve the instance itself, we're coming from an instance group
+            raw_instance_data = subprocess.check_output("gcloud compute instances describe %s --zone=%s --format=json" %
+                                                        (instance["instance"].split("/")[-1],
+                                                         instance["instance"].split("/")[-3]), shell=True)
+            instanceData = json.loads(raw_instance_data)
 
-        ip = instance.get("networkInterfaces", [{}])[0].get("accessConfigs", [{}])[0].get("natIP", None)
+        ip = instanceData.get("networkInterfaces", [{}])[0].get("accessConfigs", [{}])[0].get("natIP", None)
         if ip and not ip in INSTANCES_IP_INDEX:
-            INSTANCES_IP_INDEX[ip] = instance
+            INSTANCES_IP_INDEX[ip] = instanceData
+            allInstanceData.append(instanceData)
+    INSTANCES_CACHE = allInstanceData
 
-def _get_data(use_cache, cache_expiration):
+def _get_data(use_cache, cache_expiration, group_name=None, region=None, zone=None):
     global INSTANCES_CACHE
 
     loaded_cache = False
@@ -109,18 +120,19 @@ def _get_data(use_cache, cache_expiration):
             if not _gcloud_exists:
                 raise Exception("Can't find 'gcloud'. That means you don't have gcutil installed or it's not part of the path.\nTo install gcutil see https://cloud.google.com/sdk/")
 
-        raw_data = subprocess.check_output("gcloud compute instances list --format=json", shell=True)
-        data = json.loads(raw_data)
-
-        if use_cache and not loaded_cache:
-            f = open(cache_file_path, "w")
-            try:
-                f.write(raw_data)
-            finally:
-                f.close()
-
-    INSTANCES_CACHE = data
-    _build_instances_index()
+        if group_name != None:
+            if region is not None:
+                region_or_zone =  " --region=%s" % region
+            elif zone is not None:
+                region_or_zone = " --zone=%s" % zone
+            else:
+                region_or_zone = ""
+            raw_data = subprocess.check_output("gcloud compute instance-groups managed list-instances %s%s --format=json" % (group_name, region_or_zone), shell=True)
+            data = json.loads(raw_data)
+        else:
+            raw_data = subprocess.check_output("gcloud compute instances list --format=json", shell=True)
+            data = json.loads(raw_data)
+    _build_instances_index(data)
     return data
 
 def _get_roles(data):
@@ -177,13 +189,20 @@ def get_instance_zone_by_ip(ip):
 
     return None
 
+def get_instances_by_group(group, region, zone):
+    return update_roles_gce(group_name=group, region=region, zone=zone)
+
+def get_managed_instance_groups():
+    raw_data = subprocess.check_output("gcloud compute instance-groups managed list --format=json", shell=True)
+    return json.loads(raw_data)
+
 def target_pool_add_instance(target_pool_name, instance_name, instance_zone):
     raw_data = subprocess.check_output("gcloud compute target-pools add-instances {target_pool} --instances {instance_name} {zone_flag} {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone_flag=_get_zone_flag_name(), zone=instance_zone), shell=True)
 
 def target_pool_remove_instance(target_pool_name, instance_name, instance_zone):
     raw_data = subprocess.check_output("gcloud compute target-pools remove-instances {target_pool} --instances {instance_name} {zone_flag} {zone} --format json".format(target_pool=target_pool_name, instance_name=instance_name, zone_flag=_get_zone_flag_name(), zone=instance_zone), shell=True)
-
-def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcetools/instances"):
+    
+def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcetools/instances", group_name=None, region=None, zone=None):
     """
     Dynamically update fabric's roles by using assigning the tags associated with
     each machine in Google Compute Engine.
@@ -191,6 +210,9 @@ def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcet
     use_cache - will store a local cache in ~/.gcetools/
     cache_expiration - cache expiration in seconds (default: 1 day)
     cache_path - the path to store instances data (default: ~/.gcetools/instances)
+    group_name - optional managed instance group to use instead of the global instance pool
+    region - gce region name (such as `us-central1`) for a regional managed instance group
+    zone - gce zone name (such as `us-central1-a`) for a zone managed instance group
 
     How to use:
     - Call 'update_roles_gce' at the end of your fabfile.py (it will run each
@@ -198,11 +220,12 @@ def update_roles_gce(use_cache=True, cache_expiration=86400, cache_path="~/.gcet
     - On each function use the regular @roles decorator and set the role to the name
       of one of the tags associated with the instances you wish to work with
     """
-    data = _get_data(use_cache, cache_expiration)
+    data = _get_data(use_cache, cache_expiration, group_name=group_name, region=region, zone=zone)
     roles = _get_roles(data)
     env.roledefs.update(roles)
 
     _data_loaded = True
+    return INSTANCES_CACHE
 
 
 __all__ = [
@@ -212,6 +235,8 @@ __all__ = [
     "get_instance_name_by_ip",
     "get_instance_zone_by_ip",
     "get_instance_zone_by_name",
+    "get_instances_by_group",
+    "get_managed_instance_groups",
     "target_pool_add_instance",
     "target_pool_remove_instance"
 ]

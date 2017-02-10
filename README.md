@@ -8,6 +8,8 @@ Tools to integrate Fabric with Google Compute Engine (GCE).
     - *get_instance_name_by_ip* - get instance name by IP address (when using roles and fabric uses the IP and you want to get the current instance name based on the IP of the currently executing host)
     - *get_instance_zone_by_ip* - get the instance zone by it's IP adddress - useful for command that requires sending the instance zone since newer versions of `gcloud` do not perform a name lookup in all zones.
     - *get_instance_zone_by_name* - get the instance zone by the instance name
+    - *get_instances_by_group* - get instances from a managed instance group
+    - *get_managed_instance_groups* - retrieve a list of all managed instance groups
     - *target_pool_add_instance* - add an instance to a target pool
     - *target_pool_remove_instance* - remove an instance from a target pool
 
